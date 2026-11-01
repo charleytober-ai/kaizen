@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="g" cx="38%" cy="32%" r="75%">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset=".45" stop-color="#f0bd45"/>
+      <stop offset="1" stop-color="#b8790f"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="#2f6b64"/>
+  <g transform="translate(146 118) scale(1.1)">
+    <path d="M70 26 L70 40 C70 50 30 52 30 78 L30 212 C30 224 38 232 52 232 L148 232 C162 232 170 224 170 212 L170 78 C170 52 130 50 130 40 L130 26 Z" fill="#ffffff" fill-opacity=".14"/>
+    <g stroke="#000" stroke-opacity=".18" stroke-width="1.5">
+      <ellipse cx="52" cy="214" rx="15" ry="11" fill="#d9d2c5" transform="rotate(-10 52 214)"/>
+      <ellipse cx="83" cy="216" rx="15" ry="10" fill="#b9c4bd" transform="rotate(8 83 216)"/>
+      <ellipse cx="115" cy="214" rx="16" ry="11" fill="#e6dccb" transform="rotate(-6 115 214)"/>
+      <ellipse cx="147" cy="215" rx="15" ry="11" fill="#c9c0b2" transform="rotate(12 147 215)"/>
+      <ellipse cx="66" cy="194" rx="15" ry="10" fill="#c4cbc6" transform="rotate(14 66 194)"/>
+      <ellipse cx="98" cy="193" rx="15" ry="11" fill="url(#g)" transform="rotate(-8 98 193)"/>
+      <ellipse cx="131" cy="195" rx="16" ry="10" fill="#d6cdbd" transform="rotate(4 131 195)"/>
+      <ellipse cx="82" cy="174" rx="15" ry="10" fill="#e1d8c8" transform="rotate(-12 82 174)"/>
+      <ellipse cx="115" cy="173" rx="14" ry="10" fill="#bcc7c0" transform="rotate(10 115 173)"/>
+    </g>
+    <ellipse cx="93" cy="189" rx="4.5" ry="2.6" fill="#fffbe8" opacity=".85"/>
+    <path d="M70 26 L70 40 C70 50 30 52 30 78 L30 212 C30 224 38 232 52 232 L148 232 C162 232 170 224 170 212 L170 78 C170 52 130 50 130 40 L130 26 Z" fill="none" stroke="#f5f2ed" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M45 94 L45 196" stroke="#ffffff" stroke-opacity=".45" stroke-width="7" stroke-linecap="round"/>
+    <rect x="62" y="12" width="76" height="16" rx="6" fill="#2f6b64" stroke="#f5f2ed" stroke-width="8"/>
+  </g>
+</svg>

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Kaizen</title>
+  <meta name="description" content="A bad-day-proof habit and project tracker.">
+  <meta name="theme-color" content="#f5f2ed" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141619" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="main" tabindex="-1"></main>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <nav class="tabs" aria-label="Sections">
+    <button data-act="tab" data-tab="today">Today</button>
+    <button data-act="tab" data-tab="projects">Projects</button>
+    <button data-act="tab" data-tab="month">Month</button>
+    <button data-act="tab" data-tab="more">More</button>
+  </nav>
+  <input type="file" id="loadFile" accept="application/json,.json" hidden>
+  <noscript><p style="padding:16px">This app needs JavaScript turned on.</p></noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
