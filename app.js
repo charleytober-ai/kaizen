@@ -79,7 +79,6 @@ function seed() {
       { id: 'work', name: 'Work' },
       { id: 'safety', name: 'Safety' },
       { id: 'selfcare', name: 'Self-care' },
-      { id: 'church', name: 'Church' },
     ],
     habits: [
       h('treadmill', 'Treadmill', 'body', 'count', 'min', 'daily', 20, 'slow, flat', 30, '', 1),
@@ -89,7 +88,7 @@ function seed() {
       h('bridges', 'Glute bridges', 'body', 'count', 'reps', 'daily', 5, '', 30, '3 sets of 10', 1),
       h('pushups', 'Wall push-ups', 'body', 'count', 'reps', 'daily', 5, '', 30, '3 sets of 10', 1),
       h('skin', 'Skin routine', 'selfcare', 'done', '', 'daily', null, 'easy version', null, 'full routine', null),
-      h('church', 'Church', 'church', 'done', '', 'weekly', null, '', null, '', null),
+      h('neckpt', 'Neck PT exercise', 'body', 'done', '', 'daily', null, 'lightest version', null, 'full version, as prescribed', null),
     ],
     projects: [],
     days: {},
