@@ -11,7 +11,7 @@
   --danger: #9b3b2f;
   --glass: rgba(255, 255, 255, 0.6);
   --jar-line: #8b948f;
-  --jar-shine: rgba(255, 255, 255, 0.85);
+  --jar-shine: rgba(255, 255, 255, 0.5);
   --radius: 16px;
   --tap: 56px;
   color-scheme: light;
@@ -123,7 +123,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   border: 0; background: none; padding: 4px; min-height: 56px;
   color: var(--muted); font-weight: 700; font-size: 1.05rem;
 }
-.jar-mini svg { width: 40px; height: auto; }
+.jar-mini svg { width: 58px; height: auto; }
 
 /* Morning pick */
 .pick h2 { font-size: 1.5rem; margin: 6px 0 16px; }
@@ -244,7 +244,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 .icon-btn:disabled { opacity: .35; cursor: default; }
 .headline { font-size: 1.3rem; font-weight: 700; text-align: center; margin: 16px 0 6px; }
 .jar-wrap { text-align: center; }
-.jar-big { width: min(240px, 68%); height: auto; display: block; margin: 8px auto 4px; }
+.jar-big { width: min(380px, 100%); height: auto; display: block; margin: 8px auto 4px; }
 .jar-count { font-weight: 650; }
 .stat { padding: 12px 0; border-bottom: 1px solid var(--line); }
 .stat b, .stat span { display: block; }
@@ -253,12 +253,12 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   border-bottom: 6px solid var(--line); border-radius: 0 0 4px 4px;
 }
 .shelf button {
-  width: 76px; border: 2px solid transparent; background: none; border-radius: 12px;
+  width: 84px; border: 2px solid transparent; background: none; border-radius: 12px;
   padding: 6px 2px 4px; text-align: center; font-size: .95rem; font-weight: 650;
 }
 .shelf button[aria-current="true"] { border-color: var(--accent); }
 .shelf button span { display: block; }
-.jar-thumb { width: 54px; height: auto; display: block; margin: 0 auto 2px; }
+.jar-thumb { width: 68px; height: auto; display: block; margin: 0 auto 2px; }
 
 /* More */
 .habit-row { display: flex; align-items: center; gap: 4px; }

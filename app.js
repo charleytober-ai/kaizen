@@ -36,7 +36,6 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 const lab = () => state.settings.labels;
 
-const fmtDay = k => parseKey(k).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 const fmtShortDay = k => parseKey(k).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 const fmtWeekday = k => parseKey(k).toLocaleDateString(undefined, { weekday: 'long' });
 const fmtMonth = m => parseKey(m).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
@@ -356,7 +355,6 @@ function projectMoves(m) {
 /* ---------- the jar ---------- */
 
 const STONES = ['#a7aeb0', '#bfb3a2', '#9aa898', '#b09d8f', '#8f9cab', '#c9beae', '#a1b0a6', '#b6a99c'];
-const JAR_BODY = 'M70 26 L70 40 C70 50 30 52 30 78 L30 212 C30 224 38 232 52 232 L148 232 C162 232 170 224 170 212 L170 78 C170 52 130 50 130 40 L130 26 Z';
 let svgSeq = 0;
 
 function mulberry(a) {
@@ -373,21 +371,33 @@ function hash(s) {
   return h >>> 0;
 }
 
-function jarSVG(pebbles, seedKey, cls) {
+// A wide jar. `e` is extra height added when the jar grows to hold a big month.
+const jarBody = e => `M95 26 L95 40 C95 52 30 54 30 82 L30 ${212 + e} C30 ${224 + e} 38 ${232 + e} 52 ${232 + e} ` +
+  `L248 ${232 + e} C262 ${232 + e} 270 ${224 + e} 270 ${212 + e} L270 82 C270 54 205 52 205 40 L205 26 Z`;
+
+// grow = true: pebbles stay big and the jar gets taller when full (the month view).
+// grow = false: pebbles shrink to fit a fixed jar (small jars on the shelf and header).
+function jarSVG(pebbles, seedKey, cls, grow = false) {
   const id = `jar${++svgSeq}`;
   const rnd = mulberry(hash(seedKey));
-  const left = 36, right = 164, bottom = 227, top = 84;
-  const W = right - left, H = bottom - top, n = pebbles.length;
-  const fits = r => Math.max(1, Math.floor(W / (r * 2.25))) * Math.floor(H / (r * 1.6));
-  let r = 11;
-  while (r > 2.5 && fits(r) < n) r -= 0.25;
-  const cw = r * 2.25, rh = r * 1.6, cols = Math.max(1, Math.floor(W / cw));
+  const left = 36, right = 264, top = 90, baseBottom = 227;
+  const W = right - left, H = baseBottom - top, n = pebbles.length;
+  const R_MAX = 16, R_MIN = grow ? 10 : 2;
+  const layout = r => {
+    const cw = r * 2.25, rh = r * 1.6, cols = Math.max(1, Math.floor(W / cw));
+    return { r, cw, rh, cols, rows: Math.ceil(n / cols) };
+  };
+  let L = layout(R_MAX);
+  while (L.r > R_MIN && L.rows * L.rh > H) L = layout(L.r - 0.25);
+  const extra = grow ? Math.max(0, Math.ceil(L.rows * L.rh - H)) : 0;
+  const bottom = baseBottom + extra;
+  const { r, cw, rh, cols } = L;
   const x0 = left + (W - cols * cw) / 2;
   let body = '';
   pebbles.forEach((p, i) => {
     const row = Math.floor(i / cols), col = i % cols;
-    const stagger = (row % 2 ? 0.18 : -0.18) * cw;
-    const cx = x0 + cw * (col + 0.5) + stagger + (rnd() - 0.5) * r * 0.4;
+    const stagger = (row % 2 ? 0.12 : -0.12) * cw;
+    const cx = x0 + cw * (col + 0.5) + stagger + (rnd() - 0.5) * r * 0.35;
     const cy = bottom - rh * (row + 0.5) + (rnd() - 0.5) * r * 0.3;
     const rx = r * (1.0 + rnd() * 0.2), ry = r * (0.72 + rnd() * 0.16);
     const rot = Math.round((rnd() - 0.5) * 50);
@@ -399,16 +409,17 @@ function jarSVG(pebbles, seedKey, cls) {
       body += `<ellipse cx="${(cx - rx * 0.35).toFixed(1)}" cy="${(cy - ry * 0.35).toFixed(1)}" rx="${(rx * 0.28).toFixed(1)}" ry="${(ry * 0.22).toFixed(1)}" transform="rotate(${rot} ${c})" fill="#fffbe8" opacity=".85"/>`;
     }
   });
-  return `<svg class="${cls}" viewBox="0 0 200 244" aria-hidden="true" focusable="false">
+  const shape = jarBody(extra);
+  return `<svg class="${cls}" viewBox="0 0 300 ${244 + extra}" aria-hidden="true" focusable="false">
     <defs>
       <radialGradient id="${id}s" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#fff3c4"/><stop offset=".45" stop-color="#f0bd45"/><stop offset="1" stop-color="#b8790f"/></radialGradient>
-      <clipPath id="${id}c"><path d="${JAR_BODY}"/></clipPath>
+      <clipPath id="${id}c"><path d="${shape}"/></clipPath>
     </defs>
-    <path d="${JAR_BODY}" style="fill:var(--glass)"/>
+    <path d="${shape}" style="fill:var(--glass)"/>
     <g clip-path="url(#${id}c)">${body}</g>
-    <path d="${JAR_BODY}" style="fill:none;stroke:var(--jar-line)" stroke-width="4" stroke-linejoin="round"/>
-    <path d="M45 94 L45 198" style="stroke:var(--jar-shine)" stroke-width="5" stroke-linecap="round"/>
-    <rect x="62" y="13" width="76" height="14" rx="5" style="fill:var(--bg);stroke:var(--jar-line)" stroke-width="4"/>
+    <path d="${shape}" style="fill:none;stroke:var(--jar-line)" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M46 98 L46 ${198 + extra}" style="stroke:var(--jar-shine)" stroke-width="5" stroke-linecap="round"/>
+    <rect x="87" y="13" width="126" height="14" rx="5" style="fill:var(--bg);stroke:var(--jar-line)" stroke-width="4"/>
   </svg>`;
 }
 
@@ -425,7 +436,7 @@ function renderToday() {
   const pebs = pebblesFor(month);
 
   let html = `<header class="top">
-    <div><div class="eyebrow">Today</div><h1 class="date">${esc(fmtDay(k))}</h1></div>
+    <div><div class="eyebrow">Today · ${esc(fmtWeekday(k))}</div><h1 class="date">${esc(parseKey(k).toLocaleDateString(undefined, { month: 'long', day: 'numeric' }))}</h1></div>
     <button class="jar-mini" data-act="tab" data-tab="month" aria-label="This month's jar: ${plural(pebs.length, 'pebble')}">
       ${jarSVG(pebs, month, 'mini')}<span>${pebs.length}</span>
     </button>
@@ -654,7 +665,7 @@ function renderMonth() {
   </div>
   <p class="headline">${esc(headline(m))}</p>
   <div class="jar-wrap">
-    ${jarSVG(pebs, m, 'jar-big')}
+    ${jarSVG(pebs, m, 'jar-big', true)}
     <p class="jar-count">${pebs.length
       ? `${plural(pebs.length, 'pebble')}${shiny ? `, ${shiny} shiny` : ''}`
       : m === cur ? 'The jar fills with your first pebble.' : 'Nothing logged this month.'}</p>
