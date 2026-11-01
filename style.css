@@ -279,6 +279,8 @@ form[data-type="done"] .weekly-only { display: none; }
   display: grid; grid-template-columns: repeat(4, 1fr);
   background: var(--card); border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
+  padding-left: max(0px, calc((100vw - 640px) / 2));
+  padding-right: max(0px, calc((100vw - 640px) / 2));
 }
 .tabs button {
   min-height: 66px; border: 0; background: none;
