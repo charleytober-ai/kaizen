@@ -83,7 +83,7 @@ function seed() {
       { id: 'church', name: 'Church' },
     ],
     habits: [
-      h('treadmill', 'Treadmill', 'body', 'count', 'min', 'daily', 10, 'slow, flat', 20, 'up to 30', 1),
+      h('treadmill', 'Treadmill', 'body', 'count', 'min', 'daily', 20, 'slow, flat', 30, '', 1),
       h('protein', 'Protein', 'body', 'count', 'servings', 'daily', 1, 'a real serving or a shake', 3, 'one at each meal', null),
       h('squats', 'Chair squats', 'body', 'count', 'reps', 'daily', 5, 'shallow and slow', 30, '3 sets of 10', 1),
       h('birddogs', 'Bird dogs', 'body', 'count', 'each side', 'daily', 3, 'leg-only is fine', 24, '3 sets of 8', 1),
