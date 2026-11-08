@@ -1,6 +1,7 @@
 // Service worker: keeps the app working with no internet.
-// Serves saved files first, then quietly fetches fresh copies for next time.
-const CACHE = 'kaizen-v1';
+// Online: always gets the newest files (so updates show up right away) and saves a copy.
+// Offline, or if the network is very slow: uses the saved copy.
+const CACHE = 'kaizen-v2';
 const FILES = [
   './',
   './index.html',
@@ -25,21 +26,26 @@ self.addEventListener('activate', event => {
   );
 });
 
+const withTimeout = (promise, ms) =>
+  Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    const cached = await cache.match(req, { ignoreSearch: true }) ||
+    const saved = async () =>
+      (await cache.match(req, { ignoreSearch: true })) ||
       (req.mode === 'navigate' ? await cache.match('./index.html') : undefined);
-    const fresh = fetch(req).then(res => {
-      if (res && res.ok) cache.put(req, res.clone());
-      return res;
-    }).catch(() => undefined);
-    if (cached) {
-      event.waitUntil(fresh);
-      return cached;
+    try {
+      const res = await withTimeout(fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }), 3000);
+      if (res && res.ok) {
+        event.waitUntil(cache.put(req, res.clone()));
+        return res;
+      }
+      return (await saved()) || res;
+    } catch {
+      return (await saved()) || new Response('Offline', { status: 503 });
     }
-    return (await fresh) || new Response('Offline', { status: 503 });
   })());
 });

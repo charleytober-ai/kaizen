@@ -81,12 +81,12 @@ function seed() {
       { id: 'selfcare', name: 'Self-care' },
     ],
     habits: [
-      h('treadmill', 'Treadmill', 'body', 'count', 'min', 'daily', 20, 'slow, flat', 30, '', 1),
-      h('protein', 'Protein', 'body', 'count', 'servings', 'daily', 1, 'a real serving or a shake', 3, 'one at each meal', null),
-      h('squats', 'Chair squats', 'body', 'count', 'reps', 'daily', 5, 'shallow and slow', 30, '3 sets of 10', 1),
-      h('birddogs', 'Bird dogs', 'body', 'count', 'each side', 'daily', 3, 'leg-only is fine', 24, '3 sets of 8', 1),
-      h('bridges', 'Glute bridges', 'body', 'count', 'reps', 'daily', 5, '', 30, '3 sets of 10', 1),
-      h('pushups', 'Wall push-ups', 'body', 'count', 'reps', 'daily', 5, '', 30, '3 sets of 10', 1),
+      h('treadmill', 'Treadmill', 'body', 'count', 'min', 'daily', 20, 'slow, flat', 25, '', 1),
+      h('protein', 'Protein', 'body', 'count', 'servings', 'daily', 1, 'a real serving or a shake', 2, 'at two meals', null),
+      h('squats', 'Chair squats', 'body', 'count', 'reps', 'daily', 5, 'shallow and slow', 10, '2 sets of 5', 1),
+      h('birddogs', 'Bird dogs', 'body', 'count', 'each side', 'daily', 3, 'leg-only is fine', 6, '2 sets of 3', 1),
+      h('bridges', 'Glute bridges', 'body', 'count', 'reps', 'daily', 5, '', 10, '2 sets of 5', 1),
+      h('pushups', 'Wall push-ups', 'body', 'count', 'reps', 'daily', 5, '', 10, '2 sets of 5', 1),
       h('skin', 'Skin routine', 'selfcare', 'done', '', 'daily', null, 'easy version', null, 'full routine', null),
       h('neckpt', 'Neck PT exercise', 'body', 'done', '', 'daily', null, 'lightest version', null, 'full version, as prescribed', null),
     ],
@@ -123,6 +123,47 @@ function normalize(s) {
     if (d.note == null) d.note = '';
   }
   return s;
+}
+
+/* ---------- one-time fixes to saved data ---------- */
+
+// Each runs once per device and is recorded in settings.migrations.
+const MIGRATIONS = {
+  // The first version's Pretty good amounts were far too high.
+  // Lower only the ones still at the old starting numbers (never changed by hand).
+  'pretty-good-v2'() {
+    const k = todayKey();
+    const fixes = {
+      treadmill: { from: [30, 20], good: 25, notes: [['up to 30', '']] },
+      protein: { from: [3], good: 2, notes: [['one at each meal', 'at two meals']] },
+      squats: { from: [30], good: 10, notes: [['3 sets of 10', '2 sets of 5']] },
+      birddogs: { from: [24], good: 6, notes: [['3 sets of 8', '2 sets of 3']] },
+      bridges: { from: [30], good: 10, notes: [['3 sets of 10', '2 sets of 5']] },
+      pushups: { from: [30], good: 10, notes: [['3 sets of 10', '2 sets of 5']] },
+    };
+    for (const h of state.habits) {
+      const f = fixes[h.id];
+      if (!f || h.type !== 'count') continue;
+      const cur = currentAmounts(h);
+      if (!f.from.includes(cur.good)) continue;
+      // Treadmill still at the very first starting numbers (10 / 20): use the agreed 20 / 25.
+      const ok = h.id === 'treadmill' && cur.ok === 10 && cur.good === 20 ? 20 : cur.ok;
+      setAmounts(h, k, ok, Math.max(ok, f.good));
+      for (const [from, to] of f.notes) if (h.goodNote === from) h.goodNote = to;
+    }
+  },
+};
+
+function runMigrations() {
+  const done = state.settings.migrations || (state.settings.migrations = []);
+  let changed = false;
+  for (const [name, fn] of Object.entries(MIGRATIONS)) {
+    if (done.includes(name)) continue;
+    fn();
+    done.push(name);
+    changed = true;
+  }
+  return changed;
 }
 
 /* ---------- model ---------- */
@@ -918,6 +959,7 @@ async function loadBackup(file) {
     if (!data || typeof data !== 'object' || !Array.isArray(data.habits) || !data.days || typeof data.days !== 'object') throw new Error('not a backup');
     if (!confirm('Replace everything on this phone with this backup file?')) return;
     state = normalize(data);
+    runMigrations();
     ui.project = null;
     ui.habitEdit = null;
     commit();
@@ -1300,7 +1342,7 @@ document.addEventListener('visibilitychange', () => {
 function init() {
   const saved = load();
   state = normalize(saved || seed());
-  if (!saved) commit();
+  if (runMigrations() || !saved) commit();
   ui.day = todayKey();
   try {
     canShareFiles = !!(navigator.canShare && navigator.canShare({ files: [new File(['{}'], 'x.json', { type: 'application/json' })] }));
