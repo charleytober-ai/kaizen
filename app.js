@@ -551,15 +551,33 @@ function renderToday() {
   return html;
 }
 
+function targetFor(h, mode, k) {
+  const a = amountsOn(h, k);
+  return mode === 'good' ? a.good : mode === 'shit' && h.shit != null ? h.shit : a.ok;
+}
+
+// Done for today: reached today's target, ticked, or (weekly) already done this week.
+function isDoneToday(h, d, mode, k) {
+  const v = d.log[h.id];
+  if (v === undefined) return h.freq === 'weekly' && !!weeklyDoneOn(h, k);
+  if (h.type === 'done') return !!v;
+  return amountOf(h, v) >= targetFor(h, mode, k);
+}
+
+// What's left stays on top; finished habits slide down under "Done today".
 function habitsSection(d, mode, k) {
   const hs = activeHabits();
   if (!hs.length) return `<p class="muted">No habits yet. Add them in More.</p>`;
-  return `<h2 class="sec">Habits</h2>` + hs.map(h => habitCard(h, d, mode, k)).join('');
+  const todo = [], done = [];
+  for (const h of hs) (isDoneToday(h, d, mode, k) ? done : todo).push(h);
+  let html = `<h2 class="sec">Habits</h2>`;
+  html += todo.length ? todo.map(h => habitCard(h, d, mode, k)).join('') : `<p class="muted">Nothing left on the list.</p>`;
+  if (done.length) html += `<h2 class="sec">Done today</h2>` + done.map(h => habitCard(h, d, mode, k)).join('');
+  return html;
 }
 
 function habitCard(h, d, mode, k) {
-  const a = amountsOn(h, k);
-  const target = mode === 'good' ? a.good : mode === 'shit' && h.shit != null ? h.shit : a.ok;
+  const target = targetFor(h, mode, k);
   const note = mode === 'good' ? h.goodNote : h.okNote;
   const v = d.log[h.id];
   const weekly = h.freq === 'weekly';
