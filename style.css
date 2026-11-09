@@ -267,7 +267,8 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; }
 .removed { margin-top: 12px; }
 .editor .pair { border-top: 1px solid var(--line); margin-top: 6px; }
-form[data-type="done"] .count-only { display: none; }
+form:not([data-type="count"]) .count-only { display: none; }
+form[data-type="done"] .amount-only { display: none; }
 form[data-freq="weekly"] .daily-only { display: none; }
 form:not([data-freq="weekly"]) .weekly-only { display: none; }
 form[data-type="done"] .weekly-only { display: none; }
@@ -305,3 +306,11 @@ form[data-type="done"] .weekly-only { display: none; }
   * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
 .editor + .btn { margin-top: 12px; }
+
+/* List habits (gratitude) */
+.glist { margin: 12px 0 0; padding-left: 1.6em; }
+.glist li { padding: 2px 0; }
+.glist li > span { display: inline-block; width: calc(100% - 48px); vertical-align: middle; overflow-wrap: anywhere; }
+.glist .icon { vertical-align: middle; width: 40px; height: 40px; }
+.list-add { margin: 12px 0 4px; }
+.list-count { margin: 0; }

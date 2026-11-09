@@ -81,6 +81,7 @@ function seed() {
       { id: 'selfcare', name: 'Self-care' },
     ],
     habits: [
+      { ...h('gratitude', 'Gratitude', 'selfcare', 'list', 'things', 'daily', 7, '', 10, '', null), shit: 3 },
       h('treadmill', 'Treadmill', 'body', 'count', 'min', 'daily', 20, 'slow, flat', 25, '', 1),
       h('protein', 'Protein', 'body', 'count', 'servings', 'daily', 1, 'a real serving or a shake', 2, 'at two meals', null),
       h('squats', 'Chair squats', 'body', 'count', 'reps', 'daily', 5, 'shallow and slow', 10, '2 sets of 5', 1),
@@ -129,6 +130,16 @@ function normalize(s) {
 
 // Each runs once per device and is recorded in settings.migrations.
 const MIGRATIONS = {
+  // Gratitude list: 3 things on Shit days, 7 on OK days, 10 on Pretty good days.
+  'add-gratitude-v1'() {
+    if (state.habits.some(h => h.id === 'gratitude')) return;
+    const k = todayKey();
+    state.habits.unshift({
+      id: 'gratitude', name: 'Gratitude', category: state.categories.some(c => c.id === 'selfcare') ? 'selfcare' : '',
+      type: 'list', unit: 'things', freq: 'daily', ok: 7, okNote: '', good: 10, goodNote: '', shit: 3, step: null,
+      active: true, created: k, history: [{ month: monthOf(k), since: k, ok: 7, good: 10 }],
+    });
+  },
   // The first version's Pretty good amounts were far too high.
   // Lower only the ones still at the old starting numbers (never changed by hand).
   'pretty-good-v2'() {
@@ -211,16 +222,26 @@ function setAmounts(h, k, ok, good) {
   h.good = good;
 }
 
+// How much a logged value amounts to: a number, a done tick, or the length of a list.
+function amountOf(h, v) {
+  if (h.type === 'list') return Array.isArray(v) ? v.length : 0;
+  if (h.type === 'done') return v ? 1 : 0;
+  return Number(v) || 0;
+}
+
 // Did this logged value reach that day's OK amount?
 function hitsOK(h, v, k) {
   if (h.type === 'done') return !!v;
-  return (Number(v) || 0) >= amountsOn(h, k).ok;
+  return amountOf(h, v) >= amountsOn(h, k).ok;
 }
+
+// A day that was ever marked Shit keeps Shit-day pebble rules, so switching up later never takes a pebble back.
+const pebbleMode = d => (d.rested ? 'shit' : d.mode);
 
 // Does this logged value drop a pebble? On a Shit day, anything counts.
 function earnsPebble(h, v, mode, k) {
   if (h.type === 'done') return !!v;
-  const n = Number(v) || 0;
+  const n = amountOf(h, v);
   if (n <= 0) return false;
   return mode === 'shit' || n >= amountsOn(h, k).ok;
 }
@@ -233,7 +254,7 @@ function pebblesFor(month) {
     const d = state.days[k];
     for (const [hid, v] of Object.entries(d.log || {})) {
       const h = habit(hid);
-      if (h && earnsPebble(h, v, d.mode, k)) list.push({ shiny: false, k });
+      if (h && earnsPebble(h, v, pebbleMode(d), k)) list.push({ shiny: false, k });
     }
     for (const w of d.work || []) list.push({ shiny: w.kind !== 'worked', k });
   }
@@ -261,7 +282,7 @@ function timesDone(h, month) {
   for (const [k, d] of Object.entries(state.days)) {
     if (monthOf(k) !== month) continue;
     const v = d.log && d.log[h.id];
-    if (v && (h.type === 'done' || Number(v) > 0)) n++;
+    if (v !== undefined && amountOf(h, v) > 0) n++;
   }
   return n;
 }
@@ -272,7 +293,7 @@ function weeklyDoneOn(h, k) {
     const dk = addDays(ws, i);
     if (dk === k) continue;
     const v = state.days[dk] && state.days[dk].log[h.id];
-    if (v && (h.type === 'done' || Number(v) > 0)) return dk;
+    if (v !== undefined && amountOf(h, v) > 0) return dk;
   }
   return null;
 }
@@ -319,16 +340,33 @@ function setLog(hid, value) {
   if (!h) return;
   const k = todayKey();
   const d = getDay(k, true);
-  const before = d.log[hid] !== undefined && earnsPebble(h, d.log[hid], d.mode, k);
+  const before = d.log[hid] !== undefined && earnsPebble(h, d.log[hid], pebbleMode(d), k);
   if (h.type === 'done') {
     if (value) d.log[hid] = true; else delete d.log[hid];
   } else {
     const n = Math.max(0, round1(Number(value) || 0));
     if (n) d.log[hid] = n; else delete d.log[hid];
   }
-  const after = d.log[hid] !== undefined && earnsPebble(h, d.log[hid], d.mode, k);
+  const after = d.log[hid] !== undefined && earnsPebble(h, d.log[hid], pebbleMode(d), k);
   commit();
   render();
+  if (after && !before) toast('That counts.');
+}
+
+function addListItem(hid, text) {
+  const h = habit(hid);
+  if (!h) return;
+  const k = todayKey();
+  const d = getDay(k, true);
+  const before = d.log[hid] !== undefined && earnsPebble(h, d.log[hid], pebbleMode(d), k);
+  const items = Array.isArray(d.log[hid]) ? d.log[hid] : [];
+  items.push(text);
+  d.log[hid] = items;
+  const after = earnsPebble(h, items, pebbleMode(d), k);
+  commit();
+  render();
+  const input = document.querySelector(`form[data-form="list-add"][data-id="${hid}"] input`);
+  if (input) input.focus({ preventScroll: true });
   if (after && !before) toast('That counts.');
 }
 
@@ -495,9 +533,13 @@ function renderToday() {
 
   if (mode === 'shit') {
     html += `<p class="rest">${esc(L.shit)} day. Nothing to do.<br>Your ${esc(L.ok)} versions are here if you want them.</p>`;
-    const anyLogged = Object.keys(d.log).length > 0;
-    if (ui.showRest || anyLogged) html += habitsSection(d, 'ok', k);
-    else html += `<button class="btn wide" data-act="show-rest">Show them</button>`;
+    const light = activeHabits().filter(h => h.shit != null && h.type !== 'done');
+    const restLogged = Object.keys(d.log).some(id => !light.some(h => h.id === id));
+    if (ui.showRest || restLogged) html += habitsSection(d, 'shit', k);
+    else {
+      html += light.map(h => habitCard(h, d, 'shit', k)).join('');
+      html += `<button class="btn wide" data-act="show-rest">${light.length ? 'Show the rest' : 'Show them'}</button>`;
+    }
   } else {
     html += renderRaiseCard();
     html += habitsSection(d, mode, k);
@@ -517,21 +559,29 @@ function habitsSection(d, mode, k) {
 
 function habitCard(h, d, mode, k) {
   const a = amountsOn(h, k);
-  const target = mode === 'good' ? a.good : a.ok;
+  const target = mode === 'good' ? a.good : mode === 'shit' && h.shit != null ? h.shit : a.ok;
   const note = mode === 'good' ? h.goodNote : h.okNote;
   const v = d.log[h.id];
   const weekly = h.freq === 'weekly';
-  const counts = v !== undefined && earnsPebble(h, v, d.mode, k);
+  const counts = v !== undefined && earnsPebble(h, v, pebbleMode(d), k);
   const elsewhere = weekly && v === undefined ? weeklyDoneOn(h, k) : null;
 
   const parts = [];
-  if (h.type === 'count') parts.push(esc(amountText(h, target)));
+  if (h.type !== 'done') parts.push(esc(amountText(h, target)));
   if (note) parts.push(esc(note));
   const targetLine = `${weekly ? '<span class="tag">Once a week</span> ' : ''}${parts.join(' · ')}`;
 
   let controls;
   if (elsewhere) {
     controls = `<p class="muted done-else">Done ${esc(fmtWeekday(elsewhere))}. That counts for this week.</p>`;
+  } else if (h.type === 'list') {
+    const items = Array.isArray(v) ? v : [];
+    controls = `${items.length ? `<ol class="glist">${items.map((t, i) => `<li><span>${esc(t)}</span><button class="icon" data-act="list-del" data-id="${h.id}" data-i="${i}" aria-label="Remove: ${esc(t)}">×</button></li>`).join('')}</ol>` : ''}
+    <form class="add list-add" data-form="list-add" data-id="${h.id}">
+      <input name="text" placeholder="${items.length ? 'Another one' : 'Write one here'}" aria-label="Add to ${esc(h.name)}" autocomplete="off" maxlength="200">
+      <button class="btn primary">Add</button>
+    </form>
+    <p class="muted small list-count">${items.length} of ${target}</p>`;
   } else if (h.type === 'done') {
     controls = `<button class="btn wide toggle" data-act="toggle" data-id="${h.id}" aria-pressed="${!!v}">${v ? 'Done' : 'Did it'}</button>`;
   } else {
@@ -720,7 +770,7 @@ function renderMonth() {
     html += `<h2 class="sec">Habits</h2>` + hs.map(h => {
       const a = amountsFor(h, m), pa = amountsFor(h, shiftMonth(m, -1));
       let amt = '';
-      if (h.type === 'count') {
+      if (h.type !== 'done') {
         const changed = monthOf(h.created) < m && a.ok !== pa.ok;
         amt = changed ? `${L.ok} amount: ${pa.ok} → ${amountText(h, a.ok)}` : `${L.ok} amount: ${amountText(h, a.ok)}`;
       }
@@ -779,7 +829,7 @@ function renderMore() {
     const freq = h.freq === 'weekly' ? 'weekly' : 'daily';
     const sum = h.type === 'done'
       ? `Done or not · ${freq}`
-      : `${esc(L.ok)}: ${esc(amountText(h, a.ok))} · ${esc(L.good)}: ${esc(amountText(h, a.good))} · ${freq}`;
+      : `${h.shit != null ? `${esc(L.shit)}: ${h.shit} · ` : ''}${esc(L.ok)}: ${esc(amountText(h, a.ok))} · ${esc(L.good)}: ${esc(amountText(h, a.good))} · ${freq}`;
     return `<div class="habit-row">
       <button class="card row" data-act="edit-habit" data-id="${h.id}"><span class="p-name">${esc(h.name)}</span><span class="p-next">${sum}</span></button>
       ${i > 0 ? `<button class="icon" data-act="habit-up" data-id="${h.id}" aria-label="Move ${esc(h.name)} up">↑</button>` : '<span class="icon-space"></span>'}
@@ -849,18 +899,23 @@ function renderHabitEditor() {
   <form data-form="habit" data-type="${h.type}" data-freq="${h.freq}" class="editor">
     <label class="field"><span>Name</span><input name="name" value="${esc(h.name)}" required autocomplete="off"></label>
     <label class="field"><span>Category</span>${catSelect(h.category, 'name="category"')}</label>
-    <fieldset class="field"><legend>Kind</legend><div class="seg">${radio('type', 'count', 'A number', h.type)}${radio('type', 'done', 'Done or not', h.type)}</div></fieldset>
+    <fieldset class="field"><legend>Kind</legend><div class="seg">${radio('type', 'count', 'A number', h.type)}${radio('type', 'list', 'A list', h.type)}${radio('type', 'done', 'Done or not', h.type)}</div></fieldset>
     <fieldset class="field"><legend>How often</legend><div class="seg">${radio('freq', 'daily', 'Daily', h.freq)}${radio('freq', 'weekly', 'Weekly', h.freq)}</div></fieldset>
     <label class="field count-only"><span>Unit</span><input name="unit" value="${esc(h.unit || '')}" placeholder="min, reps, servings" autocomplete="off"></label>
 
+    <div class="pair amount-only">
+      <h2 class="sub">${esc(L.shit)} day</h2>
+      <label class="field"><span>Amount (optional)</span><input name="shit" type="number" inputmode="decimal" min="0" step="any" value="${h.shit ?? ''}">
+        <small class="muted">Fill this in and the habit shows up on ${esc(L.shit)} days with this amount. Leave blank to keep it hidden on those days.</small></label>
+    </div>
     <div class="pair">
       <h2 class="sub">${esc(L.ok)} day</h2>
-      <label class="field count-only"><span>Amount</span><input name="ok" type="number" inputmode="decimal" min="0" step="any" value="${a.ok ?? ''}"></label>
+      <label class="field amount-only"><span>Amount</span><input name="ok" type="number" inputmode="decimal" min="0" step="any" value="${a.ok ?? ''}"></label>
       <label class="field"><span>Short description (optional)</span><input name="okNote" value="${esc(h.okNote || '')}" autocomplete="off"></label>
     </div>
     <div class="pair">
       <h2 class="sub">${esc(L.good)} day</h2>
-      <label class="field count-only"><span>Amount</span><input name="good" type="number" inputmode="decimal" min="0" step="any" value="${a.good ?? ''}"></label>
+      <label class="field amount-only"><span>Amount</span><input name="good" type="number" inputmode="decimal" min="0" step="any" value="${a.good ?? ''}"></label>
       <label class="field"><span>Short description (optional)</span><input name="goodNote" value="${esc(h.goodNote || '')}" autocomplete="off"></label>
     </div>
 
@@ -879,10 +934,12 @@ function saveHabitForm(form) {
   const f = new FormData(form);
   const name = String(f.get('name') || '').trim();
   if (!name) { toast('Give it a name.'); return; }
-  const type = f.get('type') === 'done' ? 'done' : 'count';
+  const type = ['done', 'list'].includes(f.get('type')) ? f.get('type') : 'count';
   const freq = f.get('freq') === 'weekly' ? 'weekly' : 'daily';
   let ok = null, good = null;
-  if (type === 'count') {
+  let shit = type === 'done' ? null : num(f.get('shit'));
+  if (shit !== null && shit <= 0) shit = null;
+  if (type !== 'done') {
     ok = num(f.get('ok'));
     if (ok === null) ok = 1;
     good = num(f.get('good'));
@@ -902,7 +959,8 @@ function saveHabitForm(form) {
     name,
     category: String(f.get('category') || ''),
     type,
-    unit: type === 'count' ? String(f.get('unit') || '').trim() : '',
+    unit: type === 'count' ? String(f.get('unit') || '').trim() : type === 'list' ? 'things' : '',
+    shit,
     freq,
     okNote: String(f.get('okNote') || '').trim(),
     goodNote: String(f.get('goodNote') || '').trim(),
@@ -1029,7 +1087,18 @@ document.addEventListener('click', e => {
     case 'mode': {
       const d = getDay(k, true);
       d.mode = el.dataset.mode;
-      if (d.mode !== 'shit') ui.showRest = false;
+      if (d.mode === 'shit') d.rested = true;
+      else ui.showRest = false;
+      commit();
+      render();
+      break;
+    }
+    case 'list-del': {
+      const d = getDay(k);
+      const items = d && Array.isArray(d.log[id]) ? d.log[id] : null;
+      if (!items) break;
+      items.splice(Number(el.dataset.i), 1);
+      if (!items.length) delete d.log[id];
       commit();
       render();
       break;
@@ -1286,6 +1355,11 @@ document.addEventListener('submit', e => {
   const field = name => String(new FormData(form).get(name) || '').trim();
 
   if (kind === 'habit') { saveHabitForm(form); return; }
+  if (kind === 'list-add') {
+    const text = field('text');
+    if (text) addListItem(form.dataset.id, text);
+    return;
+  }
   if (kind === 'add-project') {
     const name = field('name');
     if (!name) return;
