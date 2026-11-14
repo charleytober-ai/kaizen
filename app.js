@@ -130,6 +130,26 @@ function normalize(s) {
 
 // Each runs once per device and is recorded in settings.migrations.
 const MIGRATIONS = {
+  // Step up OK amounts, asked for on Nov 14, 2026. Only touches amounts still at the
+  // old numbers; skipped on a fresh install. Each step-up drops a shiny pebble.
+  'ok-step-2026-11'() {
+    const k = todayKey();
+    const plan = { treadmill: [20, 21], squats: [5, 7], birddogs: [3, 4], bridges: [5, 7], pushups: [5, 7] };
+    const d = state.days[k];
+    const names = [];
+    for (const h of state.habits) {
+      const p = plan[h.id];
+      if (!p || h.type !== 'count' || h.created >= k) continue;
+      const cur = currentAmounts(h);
+      if (cur.ok !== p[0]) continue;
+      // Already logged today? Start the new amount tomorrow so today's pebble stays.
+      const loggedToday = !!(d && d.log[h.id] !== undefined);
+      setAmounts(h, loggedToday ? addDays(k, 1) : k, p[1], Math.max(cur.good ?? p[1], p[1]));
+      state.raises.push({ month: 'manual', habit: h.id, from: p[0], to: p[1], accepted: true, at: k });
+      names.push(`${h.name} ${amountText(h, p[1])}`);
+    }
+    return names.length ? `${lab().ok} amounts stepped up: ${names.join(', ')}. That counts.` : '';
+  },
   // Gratitude list: 3 things on Shit days, 7 on OK days, 10 on Pretty good days.
   'add-gratitude-v1'() {
     if (state.habits.some(h => h.id === 'gratitude')) return;
@@ -165,16 +185,18 @@ const MIGRATIONS = {
   },
 };
 
+// Returns the messages to show, or null if nothing ran.
 function runMigrations() {
   const done = state.settings.migrations || (state.settings.migrations = []);
-  let changed = false;
+  let ran = null;
   for (const [name, fn] of Object.entries(MIGRATIONS)) {
     if (done.includes(name)) continue;
-    fn();
+    const msg = fn();
     done.push(name);
-    changed = true;
+    ran = ran || [];
+    if (msg) ran.push(msg);
   }
-  return changed;
+  return ran;
 }
 
 /* ---------- model ---------- */
@@ -1056,7 +1078,7 @@ function toast(msg, opts = {}) {
   t.hidden = false;
   toastUndo = opts.undo || null;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, opts.undo ? 6000 : 2000);
+  toastTimer = setTimeout(hideToast, opts.ms || (opts.undo ? 6000 : 2000));
 }
 function hideToast() {
   $('#toast').hidden = true;
@@ -1434,12 +1456,14 @@ document.addEventListener('visibilitychange', () => {
 function init() {
   const saved = load();
   state = normalize(saved || seed());
-  if (runMigrations() || !saved) commit();
+  const updates = runMigrations();
+  if (updates || !saved) commit();
   ui.day = todayKey();
   try {
     canShareFiles = !!(navigator.canShare && navigator.canShare({ files: [new File(['{}'], 'x.json', { type: 'application/json' })] }));
   } catch { canShareFiles = false; }
   render();
+  if (updates && updates.length) toast(updates.join(' '), { ms: 8000 });
   askToKeep();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});
