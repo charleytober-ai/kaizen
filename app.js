@@ -535,8 +535,12 @@ function renderToday() {
   const mode = d && d.mode;
   const pebs = pebblesFor(month);
 
+  const seg = mode ? `<div class="seg day-seg" role="group" aria-label="Today is">
+    ${MODES.map(m => `<button data-act="mode" data-mode="${m}" aria-pressed="${m === mode}">${esc(L[m])}</button>`).join('')}
+  </div>` : '';
   let html = `<header class="top">
-    <div><div class="eyebrow">Today · ${esc(fmtWeekday(k))}</div><h1 class="date">${esc(parseKey(k).toLocaleDateString(undefined, { month: 'long', day: 'numeric' }))}</h1></div>
+    <div class="top-date"><div class="eyebrow">Today · ${esc(fmtWeekday(k))}</div><h1 class="date">${esc(parseKey(k).toLocaleDateString(undefined, { month: 'long', day: 'numeric' }))}</h1></div>
+    ${seg}
     <button class="jar-mini" data-act="tab" data-tab="month" aria-label="This month's jar: ${plural(pebs.length, 'pebble')}">
       ${jarSVG(pebs, month, 'mini')}<span>${pebs.length}</span>
     </button>
@@ -549,9 +553,6 @@ function renderToday() {
     return html;
   }
 
-  html += `<div class="seg" role="group" aria-label="Today is">
-    ${MODES.map(m => `<button data-act="mode" data-mode="${m}" aria-pressed="${m === mode}">${esc(L[m])}</button>`).join('')}
-  </div>`;
 
   if (mode === 'shit') {
     html += `<p class="rest">${esc(L.shit)} day. Nothing to do.<br>Your ${esc(L.ok)} versions are here if you want them.</p>`;
@@ -559,7 +560,7 @@ function renderToday() {
     const restLogged = Object.keys(d.log).some(id => !light.some(h => h.id === id));
     if (ui.showRest || restLogged) html += habitsSection(d, 'shit', k);
     else {
-      html += light.map(h => habitCard(h, d, 'shit', k)).join('');
+      if (light.length) html += `<div class="cards">${light.map(h => habitCard(h, d, 'shit', k)).join('')}</div>`;
       html += `<button class="btn wide" data-act="show-rest">${light.length ? 'Show the rest' : 'Show them'}</button>`;
     }
   } else {
@@ -593,8 +594,8 @@ function habitsSection(d, mode, k) {
   const todo = [], done = [];
   for (const h of hs) (isDoneToday(h, d, mode, k) ? done : todo).push(h);
   let html = `<h2 class="sec">Habits</h2>`;
-  html += todo.length ? todo.map(h => habitCard(h, d, mode, k)).join('') : `<p class="muted">Nothing left on the list.</p>`;
-  if (done.length) html += `<h2 class="sec">Done today</h2>` + done.map(h => habitCard(h, d, mode, k)).join('');
+  html += todo.length ? `<div class="cards">${todo.map(h => habitCard(h, d, mode, k)).join('')}</div>` : `<p class="muted">Nothing left on the list.</p>`;
+  if (done.length) html += `<h2 class="sec">Done today</h2><div class="cards">${done.map(h => habitCard(h, d, mode, k)).join('')}</div>`;
   return html;
 }
 
@@ -634,10 +635,12 @@ function habitCard(h, d, mode, k) {
     </div>`;
   }
 
-  return `<div class="card habit${counts || elsewhere ? ' counts' : ''}">
-    <div class="h-top"><span class="h-name">${esc(h.name)}</span>${counts ? `<span class="counts-tag">${PEBBLE_ICON}counts</span>` : ''}</div>
-    ${targetLine ? `<div class="h-target">${targetLine}</div>` : ''}
-    ${controls}
+  return `<div class="card habit type-${h.type}${counts || elsewhere ? ' counts' : ''}">
+    <div class="h-info">
+      <div class="h-top"><span class="h-name">${esc(h.name)}</span>${counts ? `<span class="counts-tag" title="Counts">${PEBBLE_ICON}<span class="ct-word">counts</span></span>` : ''}</div>
+      ${targetLine ? `<div class="h-target" title="${[h.type !== 'done' ? amountText(h, target) : '', note || ''].filter(Boolean).map(esc).join(' · ')}">${targetLine}</div>` : ''}
+    </div>
+    <div class="h-ctrl">${controls}</div>
   </div>`;
 }
 
@@ -646,7 +649,7 @@ function projectsToday(k) {
   if (!ps.length) {
     return `<h2 class="sec">Projects</h2><p class="muted">No projects yet. <button class="link" data-act="tab" data-tab="projects">Add one</button></p>`;
   }
-  return `<h2 class="sec">Projects</h2>` + ps.map(p => projectCard(p, k)).join('');
+  return `<h2 class="sec">Projects</h2><div class="cards">${ps.map(p => projectCard(p, k)).join('')}</div>`;
 }
 
 function projectCard(p, k) {
@@ -1091,6 +1094,7 @@ function render() {
   const k = todayKey();
   if (ui.day !== k) { ui.day = k; ui.showRest = false; }
   const views = { today: renderToday, projects: renderProjects, month: renderMonth, more: renderMore };
+  $('#main').dataset.tab = ui.tab;
   $('#main').innerHTML = (views[ui.tab] || renderToday)();
   document.querySelectorAll('.tabs [data-tab]').forEach(b => {
     if (b.dataset.tab === ui.tab) b.setAttribute('aria-current', 'page');
