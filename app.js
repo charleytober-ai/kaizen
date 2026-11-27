@@ -6,11 +6,12 @@ const DEFAULT_SETTINGS = {
   raiseThreshold: 0.6,
   raiseMinDays: 8,
   dayStartHour: 4,
-  labels: { shit: 'Shit', ok: 'OK', good: 'Pretty good' },
+  labels: { rest: 'Rough', ok: 'OK', good: 'Good' },
   lastBackup: null,
 };
-const MODES = ['shit', 'ok', 'good'];
-const MODE_HINT = { shit: 'Rest. Nothing to do.', ok: 'The small versions.', good: 'The full versions.' };
+const MODES = ['rest', 'ok', 'good'];
+const HABIT_FIELDS = new Set(['id', 'name', 'category', 'type', 'unit', 'freq', 'ok', 'okNote', 'good', 'goodNote', 'rest', 'step', 'active', 'created', 'history']);
+const MODE_HINT = { rest: 'Rest. Nothing to do.', ok: 'The small versions.', good: 'The full versions.' };
 
 let state = null;
 const ui = { tab: 'today', month: null, project: null, habitEdit: null, showRest: false, day: null };
@@ -81,7 +82,7 @@ function seed() {
       { id: 'selfcare', name: 'Self-care' },
     ],
     habits: [
-      { ...h('gratitude', 'Gratitude', 'selfcare', 'list', 'things', 'daily', 7, '', 10, '', null), shit: 3 },
+      { ...h('gratitude', 'Gratitude', 'selfcare', 'list', 'things', 'daily', 7, '', 10, '', null), rest: 3 },
       h('treadmill', 'Treadmill', 'body', 'count', 'min', 'daily', 20, 'slow, flat', 25, '', 1),
       h('protein', 'Protein', 'body', 'count', 'servings', 'daily', 1, 'a real serving or a shake', 2, 'at two meals', null),
       h('squats', 'Chair squats', 'body', 'count', 'reps', 'daily', 5, 'shallow and slow', 10, '2 sets of 5', 1),
@@ -89,7 +90,7 @@ function seed() {
       h('bridges', 'Glute bridges', 'body', 'count', 'reps', 'daily', 5, '', 10, '2 sets of 5', 1),
       h('pushups', 'Wall push-ups', 'body', 'count', 'reps', 'daily', 5, '', 10, '2 sets of 5', 1),
       h('skin', 'Skin routine', 'selfcare', 'done', '', 'daily', null, 'easy version', null, 'full routine', null),
-      h('neckpt', 'Neck PT exercise', 'body', 'done', '', 'daily', null, 'lightest version', null, 'full version, as prescribed', null),
+      h('stretch', 'Stretching', 'body', 'done', '', 'daily', null, 'a few minutes', null, 'full routine', null),
     ],
     projects: [],
     days: {},
@@ -106,12 +107,25 @@ function normalize(s) {
   s.days = s.days && typeof s.days === 'object' ? s.days : {};
   s.raises = Array.isArray(s.raises) ? s.raises : [];
   const st = s.settings || {};
+  // Older saves used another internal name for the rest day. Any label key the app doesn't
+  // know is that older name: keep the person's own word and file it under 'rest'.
+  for (const key of Object.keys(st.labels || {})) {
+    if (MODES.includes(key)) continue;
+    if (st.labels.rest === undefined) st.labels.rest = st.labels[key];
+    delete st.labels[key];
+  }
   s.settings = { ...DEFAULT_SETTINGS, ...st, labels: { ...DEFAULT_SETTINGS.labels, ...(st.labels || {}) } };
   const fallback = keyOf(new Date());
   for (const h of s.habits) {
     if (!h.created) h.created = fallback;
     if (h.active === undefined) h.active = true;
     if (!Array.isArray(h.history) || !h.history.length) h.history = [{ month: monthOf(h.created), ok: h.ok ?? null, good: h.good ?? null }];
+    // Same for an older name of the rest-day amount: the one unknown number field.
+    for (const key of Object.keys(h)) {
+      if (HABIT_FIELDS.has(key) || typeof h[key] !== 'number') continue;
+      if (h.rest === undefined) h.rest = h[key];
+      delete h[key];
+    }
   }
   for (const p of s.projects) {
     p.steps = Array.isArray(p.steps) ? p.steps : [];
@@ -119,6 +133,7 @@ function normalize(s) {
     p.status = p.status || 'active';
   }
   for (const d of Object.values(s.days)) {
+    if (d.mode && !MODES.includes(d.mode)) d.mode = 'rest';
     d.log = d.log || {};
     d.work = d.work || [];
     if (d.note == null) d.note = '';
@@ -150,13 +165,13 @@ const MIGRATIONS = {
     }
     return names.length ? `${lab().ok} amounts stepped up: ${names.join(', ')}. That counts.` : '';
   },
-  // Gratitude list: 3 things on Shit days, 7 on OK days, 10 on Pretty good days.
+  // Gratitude list: 3 things on rest days, 7 on OK days, 10 on good days.
   'add-gratitude-v1'() {
     if (state.habits.some(h => h.id === 'gratitude')) return;
     const k = todayKey();
     state.habits.unshift({
       id: 'gratitude', name: 'Gratitude', category: state.categories.some(c => c.id === 'selfcare') ? 'selfcare' : '',
-      type: 'list', unit: 'things', freq: 'daily', ok: 7, okNote: '', good: 10, goodNote: '', shit: 3, step: null,
+      type: 'list', unit: 'things', freq: 'daily', ok: 7, okNote: '', good: 10, goodNote: '', rest: 3, step: null,
       active: true, created: k, history: [{ month: monthOf(k), since: k, ok: 7, good: 10 }],
     });
   },
@@ -257,15 +272,15 @@ function hitsOK(h, v, k) {
   return amountOf(h, v) >= amountsOn(h, k).ok;
 }
 
-// A day that was ever marked Shit keeps Shit-day pebble rules, so switching up later never takes a pebble back.
-const pebbleMode = d => (d.rested ? 'shit' : d.mode);
+// A day that was ever marked as a rest day keeps rest-day pebble rules, so switching up later never takes a pebble back.
+const pebbleMode = d => (d.rested ? 'rest' : d.mode);
 
-// Does this logged value drop a pebble? On a Shit day, anything counts.
+// Does this logged value drop a pebble? On a rest day, anything counts.
 function earnsPebble(h, v, mode, k) {
   if (h.type === 'done') return !!v;
   const n = amountOf(h, v);
   if (n <= 0) return false;
-  return mode === 'shit' || n >= amountsOn(h, k).ok;
+  return mode === 'rest' || n >= amountsOn(h, k).ok;
 }
 
 // Pebbles are worked out from the log, never stored, so they can't drift.
@@ -287,11 +302,11 @@ function pebblesFor(month) {
   return list;
 }
 
-// Daily habit stats for a month. Only days with a check-in that weren't Shit days count.
+// Daily habit stats for a month. Only days with a check-in that weren't rest days count.
 function habitStats(h, month) {
   let days = 0, hits = 0;
   for (const [k, d] of Object.entries(state.days)) {
-    if (monthOf(k) !== month || !d.mode || d.mode === 'shit' || k < h.created) continue;
+    if (monthOf(k) !== month || !d.mode || d.mode === 'rest' || k < h.created) continue;
     days++;
     const v = d.log && d.log[h.id];
     if (v !== undefined && hitsOK(h, v, k)) hits++;
@@ -554,13 +569,13 @@ function renderToday() {
   }
 
 
-  if (mode === 'shit') {
-    html += `<p class="rest">${esc(L.shit)} day. Nothing to do.<br>Your ${esc(L.ok)} versions are here if you want them.</p>`;
-    const light = activeHabits().filter(h => h.shit != null && h.type !== 'done');
+  if (mode === 'rest') {
+    html += `<p class="rest">${esc(L.rest)} day. Nothing to do.<br>Your ${esc(L.ok)} versions are here if you want them.</p>`;
+    const light = activeHabits().filter(h => h.rest != null && h.type !== 'done');
     const restLogged = Object.keys(d.log).some(id => !light.some(h => h.id === id));
-    if (ui.showRest || restLogged) html += habitsSection(d, 'shit', k);
+    if (ui.showRest || restLogged) html += habitsSection(d, 'rest', k);
     else {
-      if (light.length) html += `<div class="cards">${light.map(h => habitCard(h, d, 'shit', k)).join('')}</div>`;
+      if (light.length) html += `<div class="cards">${light.map(h => habitCard(h, d, 'rest', k)).join('')}</div>`;
       html += `<button class="btn wide" data-act="show-rest">${light.length ? 'Show the rest' : 'Show them'}</button>`;
     }
   } else {
@@ -576,7 +591,7 @@ function renderToday() {
 
 function targetFor(h, mode, k) {
   const a = amountsOn(h, k);
-  return mode === 'good' ? a.good : mode === 'shit' && h.shit != null ? h.shit : a.ok;
+  return mode === 'good' ? a.good : mode === 'rest' && h.rest != null ? h.rest : a.ok;
 }
 
 // Done for today: reached today's target, ticked, or (weekly) already done this week.
@@ -789,7 +804,7 @@ function renderMonth() {
   const pebs = pebblesFor(m);
   const shiny = pebs.filter(p => p.shiny).length;
   const checked = Object.entries(state.days).filter(([k, d]) => monthOf(k) === m && d.mode);
-  const shitDays = checked.filter(([, d]) => d.mode === 'shit').length;
+  const restDays = checked.filter(([, d]) => d.mode === 'rest').length;
 
   let html = `<div class="month-nav">
     <button class="icon-btn" data-act="month" data-m="${shiftMonth(m, -1)}" ${m <= first ? 'disabled' : ''} aria-label="Previous month">‹</button>
@@ -805,7 +820,7 @@ function renderMonth() {
   </div>`;
 
   if (checked.length) {
-    html += `<p class="muted center">${plural(checked.length, 'day')} checked in.${shitDays ? ` ${shitDays} ${esc(L.shit)} day${shitDays === 1 ? '' : 's'}, not counted.` : ''}</p>`;
+    html += `<p class="muted center">${plural(checked.length, 'day')} checked in.${restDays ? ` ${restDays} ${esc(L.rest)} day${restDays === 1 ? '' : 's'}, not counted.` : ''}</p>`;
   }
 
   const hs = state.habits.filter(h => monthOf(h.created) <= m && (h.active || usedIn(h, m)));
@@ -872,7 +887,7 @@ function renderMore() {
     const freq = h.freq === 'weekly' ? 'weekly' : 'daily';
     const sum = h.type === 'done'
       ? `Done or not · ${freq}`
-      : `${h.shit != null ? `${esc(L.shit)}: ${h.shit} · ` : ''}${esc(L.ok)}: ${esc(amountText(h, a.ok))} · ${esc(L.good)}: ${esc(amountText(h, a.good))} · ${freq}`;
+      : `${h.rest != null ? `${esc(L.rest)}: ${h.rest} · ` : ''}${esc(L.ok)}: ${esc(amountText(h, a.ok))} · ${esc(L.good)}: ${esc(amountText(h, a.good))} · ${freq}`;
     return `<div class="habit-row">
       <button class="card row" data-act="edit-habit" data-id="${h.id}"><span class="p-name">${esc(h.name)}</span><span class="p-next">${sum}</span></button>
       ${i > 0 ? `<button class="icon" data-act="habit-up" data-id="${h.id}" aria-label="Move ${esc(h.name)} up">↑</button>` : '<span class="icon-space"></span>'}
@@ -907,7 +922,7 @@ function renderMore() {
   </form>
 
   <h2 class="sec">Words on the morning buttons</h2>
-  <label class="field"><span>Rest day</span><input value="${esc(L.shit)}" data-change="label" data-key="shit" autocomplete="off"></label>
+  <label class="field"><span>Rest day</span><input value="${esc(L.rest)}" data-change="label" data-key="rest" autocomplete="off"></label>
   <label class="field"><span>Small-version day</span><input value="${esc(L.ok)}" data-change="label" data-key="ok" autocomplete="off"></label>
   <label class="field"><span>Full-version day</span><input value="${esc(L.good)}" data-change="label" data-key="good" autocomplete="off"></label>
 
@@ -916,7 +931,7 @@ function renderMore() {
     <input type="number" inputmode="numeric" min="1" max="100" value="${Math.round(st.raiseThreshold * 100)}" data-change="set-threshold"></label>
   <label class="field"><span>…with at least this many days logged that month</span>
     <input type="number" inputmode="numeric" min="1" max="31" value="${st.raiseMinDays}" data-change="set-mindays"></label>
-  <p class="muted small">${esc(L.shit)} days are never counted. Raises are only ever offered, never automatic, and amounts never go down on their own.</p>
+  <p class="muted small">${esc(L.rest)} days are never counted. Raises are only ever offered, never automatic, and amounts never go down on their own.</p>
 
   <h2 class="sec">New day starts at</h2>
   <label class="field"><span class="sr">New day starts at</span>
@@ -947,9 +962,9 @@ function renderHabitEditor() {
     <label class="field count-only"><span>Unit</span><input name="unit" value="${esc(h.unit || '')}" placeholder="min, reps, servings" autocomplete="off"></label>
 
     <div class="pair amount-only">
-      <h2 class="sub">${esc(L.shit)} day</h2>
-      <label class="field"><span>Amount (optional)</span><input name="shit" type="number" inputmode="decimal" min="0" step="any" value="${h.shit ?? ''}">
-        <small class="muted">Fill this in and the habit shows up on ${esc(L.shit)} days with this amount. Leave blank to keep it hidden on those days.</small></label>
+      <h2 class="sub">${esc(L.rest)} day</h2>
+      <label class="field"><span>Amount (optional)</span><input name="rest" type="number" inputmode="decimal" min="0" step="any" value="${h.rest ?? ''}">
+        <small class="muted">Fill this in and the habit shows up on ${esc(L.rest)} days with this amount. Leave blank to keep it hidden on those days.</small></label>
     </div>
     <div class="pair">
       <h2 class="sub">${esc(L.ok)} day</h2>
@@ -980,8 +995,8 @@ function saveHabitForm(form) {
   const type = ['done', 'list'].includes(f.get('type')) ? f.get('type') : 'count';
   const freq = f.get('freq') === 'weekly' ? 'weekly' : 'daily';
   let ok = null, good = null;
-  let shit = type === 'done' ? null : num(f.get('shit'));
-  if (shit !== null && shit <= 0) shit = null;
+  let rest = type === 'done' ? null : num(f.get('rest'));
+  if (rest !== null && rest <= 0) rest = null;
   if (type !== 'done') {
     ok = num(f.get('ok'));
     if (ok === null) ok = 1;
@@ -1003,7 +1018,7 @@ function saveHabitForm(form) {
     category: String(f.get('category') || ''),
     type,
     unit: type === 'count' ? String(f.get('unit') || '').trim() : type === 'list' ? 'things' : '',
-    shit,
+    rest,
     freq,
     okNote: String(f.get('okNote') || '').trim(),
     goodNote: String(f.get('goodNote') || '').trim(),
@@ -1131,7 +1146,7 @@ document.addEventListener('click', e => {
     case 'mode': {
       const d = getDay(k, true);
       d.mode = el.dataset.mode;
-      if (d.mode === 'shit') d.rested = true;
+      if (d.mode === 'rest') d.rested = true;
       else ui.showRest = false;
       commit();
       render();
@@ -1459,9 +1474,11 @@ document.addEventListener('visibilitychange', () => {
 
 function init() {
   const saved = load();
+  const before = saved ? JSON.stringify(saved) : null;
   state = normalize(saved || seed());
   const updates = runMigrations();
-  if (updates || !saved) commit();
+  // Save if anything was added, updated or tidied on load.
+  if (updates || !saved || JSON.stringify(state) !== before) commit();
   ui.day = todayKey();
   try {
     canShareFiles = !!(navigator.canShare && navigator.canShare({ files: [new File(['{}'], 'x.json', { type: 'application/json' })] }));
